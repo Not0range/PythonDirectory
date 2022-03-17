@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace PythonDirectory
 {
-    class InfoCollection
+    class InfoCollection : IEnumerable<Info>
     {
         List<Info> list;
         public event Action GetInfo;
@@ -23,6 +24,16 @@ namespace PythonDirectory
                 GetInfo();
                 return list[i];
             }
+        }
+
+        public IEnumerator<Info> GetEnumerator()
+        {
+            return ((IEnumerable<Info>)list).GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return ((IEnumerable)list).GetEnumerator();
         }
     }
 }
