@@ -20,7 +20,7 @@ namespace PythonDirectory
 
     interface ICheck
     {
-        event Action CheckedChanged;
+        event Action<Info> CheckedChanged;
         bool IsChecked { get; set; }
     }
 
@@ -38,7 +38,7 @@ namespace PythonDirectory
     {
         public string solution;
         bool isChecked;
-        Action checkedChanged;
+        Action<Info> checkedChanged;
 
         public bool IsChecked
         {
@@ -48,13 +48,13 @@ namespace PythonDirectory
             }
             set
             {
-                if (checkedChanged != null)
-                    checkedChanged();
                 isChecked = value;
+                if (checkedChanged != null)
+                    checkedChanged(this);
             }
         }
 
-        public event Action CheckedChanged
+        public event Action<Info> CheckedChanged
         {
             add
             {
@@ -75,7 +75,7 @@ namespace PythonDirectory
     class Example : Info, ICheck
     {
         bool isChecked;
-        Action checkedChanged;
+        Action<Info> checkedChanged;
 
         public Example(string topic, string[] text) : base(topic, text) { }
 
@@ -87,13 +87,13 @@ namespace PythonDirectory
             } 
             set
             {
-                if(checkedChanged != null)
-                    checkedChanged();
                 isChecked = value;
+                if (checkedChanged != null)
+                    checkedChanged(this);
             }
         }
 
-        public event Action CheckedChanged
+        public event Action<Info> CheckedChanged
         {
             add
             {

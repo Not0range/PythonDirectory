@@ -23,16 +23,52 @@ namespace PythonDirectory
 
         private void MainForm_Load(object sender, EventArgs e)
         {
+            WriteLog("Запуск программы");
             var worker = new BackgroundWorker();
             worker.DoWork += ReadInfos;
             worker.RunWorkerAsync();
         }
 
+        private void LogGetInfo(Info info)
+        {
+            WriteLog("Открыта тема " + info.topic);
+        }
+
+        private void Complete_CheckedChanged(Info info)
+        {
+            WriteLog("Тема " + info.topic + " отмечана как " + ((info as ICheck).IsChecked ?
+                "выполненная" : "не выполненная"));
+        }
+
+        private void WriteLog(string msg)
+        {
+            try
+            {
+                var writer = new StreamWriter("log.txt", true);
+                writer.WriteLine("[{0}] {1}", 
+                    DateTime.Now.ToString("dd.MM.yy HH:mm:ss"), msg);
+                writer.Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Ошибка при записи журнала:\n" + ex.Message, 
+                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void ReadInfos(object sender, DoWorkEventArgs e)
         {
+            int[] ind;
+            if (File.Exists("checked.txt"))
+                ind = File.ReadAllText("checked.txt")
+                    .Split(new string[] { ", " }, StringSplitOptions.RemoveEmptyEntries)
+                    .Where(i => !string.IsNullOrWhiteSpace(i)).Select(i => int.Parse(i)).ToArray();
+            else
+                ind = new int[0];
+
             string text = File.ReadAllText("dictionary.txt");
-            var mc = Regex.Matches(text, @"@topic=(?<topic>\w+);" +
-                @"(chapter=(?<chapter>\w+);)?(?<text>[^@\^]+)" +
+            var mc = Regex.Matches(text, @"@topic=(?<topic>[^;]+);" +
+                @"(chapter=(?<chapter>[^;]+);)?(?<text>[^@\^]+)" +
                 @"(\^(?<solution>[^@\^]+))?@");
             var infos = new Info[mc.Count];
             for (int i = 0; i < mc.Count; i++)
@@ -57,6 +93,12 @@ namespace PythonDirectory
                         mc[i].Groups["text"].Value.Split(new string[] { "\r", "\n" },
                         StringSplitOptions.RemoveEmptyEntries));
                 }
+                if(infos[i] is ICheck)
+                {
+                    if (ind.Contains(i))
+                        (infos[i] as ICheck).IsChecked = true;
+                    (infos[i] as ICheck).CheckedChanged += Complete_CheckedChanged;
+                }
             }
             _info = new InfoCollection(infos);
             Invoke(new Action(AddInfosToForm));
@@ -70,7 +112,7 @@ namespace PythonDirectory
 
                 if (i is Directory)
                 {
-                    var gb = Controls.OfType<GroupBox>().FirstOrDefault(g =>
+                    var gb = tabPage1.Controls.OfType<GroupBox>().FirstOrDefault(g =>
                         g.Text == (i as Directory).chapter);
                     if(gb == null)
                     {
@@ -115,6 +157,9 @@ namespace PythonDirectory
             };
             l.Click += (s, e) =>
             {
+
+                LogGetInfo(info);
+
                 var form = new Form
                 {
                     Text = info.topic,
@@ -124,6 +169,11 @@ namespace PythonDirectory
                     AutoScroll = true,
                     Padding = new Padding(5),
                 };
+                form.ResizeEnd += Form_ResizeEnd;
+                form.Show(this);
+                form.SuspendLayout();
+                Application.DoEvents();
+
                 foreach (var t in info.text)
                 {
                     var tb = new TextBox
@@ -131,6 +181,7 @@ namespace PythonDirectory
                         BorderStyle = BorderStyle.None,
                         Dock = DockStyle.Top,
                         Multiline = true,
+                        Margin = new Padding(5),
                     };
                     if (t[0] == '#')
                     {
@@ -141,14 +192,53 @@ namespace PythonDirectory
                     else
                         tb.Text = t;
                     tb.KeyPress += (sender, ea) => ea.Handled = true;
+                    tb.MouseWheel += (sender, ea) =>
+                    {
+                        if (form.VerticalScroll.Value - ea.Delta < form.VerticalScroll.Minimum)
+                        {
+                            form.VerticalScroll.Value = form.VerticalScroll.Minimum;
+                            return;
+                        }
+                        else if (form.VerticalScroll.Value - ea.Delta > form.VerticalScroll.Maximum)
+                        {
+                            form.VerticalScroll.Value = form.VerticalScroll.Maximum;
+                            return;
+                        }
+                        form.VerticalScroll.Value -= ea.Delta;
+                        form.VerticalScroll.Value -= ea.Delta;
+                    };
                     form.Controls.Add(tb);
                     tb.BringToFront();
+                    form.ResumeLayout();
+                    tb.Height = (tb.GetLineFromCharIndex(tb.TextLength) + 1) *
+                        tb.Font.Height;
+                    form.SuspendLayout();
+                    Application.DoEvents();
                 }
-                if(info is Exercise)
+                if (info is ICheck)
+                {
+                    var cb = new CheckBox
+                    {
+                        Text = "Выполнено",
+                        Checked = (info as ICheck).IsChecked,
+                        Dock = DockStyle.Top
+                    };
+                    cb.CheckedChanged += (sender, ea) => 
+                        (info as ICheck).IsChecked = cb.Checked;
+                    form.Controls.Add(cb);
+                }
+                if (info is Exercise)
                     AddSolution(info, form);
-                form.Show(this);
+                form.ResumeLayout();
             };
             return l;
+        }
+
+        private void Form_ResizeEnd(object sender, EventArgs e)
+        {
+            foreach (var tb in (sender as Form).Controls.OfType<TextBox>())
+                tb.Height = (tb.GetLineFromCharIndex(tb.TextLength) + 1) *
+                           tb.Font.Height;
         }
 
         private static void AddSolution(Info info, Form form)
@@ -180,18 +270,17 @@ namespace PythonDirectory
                 Multiline = true,
                 BackColor = SystemColors.Control,
             };
-            tb.Height = (int)((info as Exercise).solution.Split(new string[]
-                { "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries).Length *
-                (tb.Font.Size * SIZE_MULTIPLER));
             tb.Font = new Font("Courier New", tb.Font.Size);
             tb.KeyPress += (sender, ea) => ea.Handled = true;
             gb.Controls.Add(tb);
 
             form.Controls.Add(gb);
-            gb.BringToFront();
+            gb.BringToFront(); 
+            tb.Height = (tb.GetLineFromCharIndex(tb.TextLength) + 1) *
+                tb.Font.Height;
         }
 
-        private void textBox1_TextChanged(object sender, EventArgs e)
+        private void search_TextChanged(object sender, EventArgs e)
         {
             searchResult.Controls.Clear();
             if (searchBox.Text.Length < 3)
@@ -204,6 +293,20 @@ namespace PythonDirectory
                 searchResult.Controls.Add(CreateInfoControl(info));
                 Application.DoEvents();
             }
+        }
+
+        private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            var ind = new List<int>();
+            for (int i = 0; i < _info.Count; i++)
+                if ((_info[i] is ICheck) && (_info[i] as ICheck).IsChecked)
+                    ind.Add(i);
+
+            var writer = new StreamWriter("checked.txt", false);
+            writer.WriteLine(string.Join(", ", ind.ToArray()));
+            writer.Close();
+
+            WriteLog("Завершение работы");
         }
     }
 }

@@ -10,7 +10,6 @@ namespace PythonDirectory
     class InfoCollection : IEnumerable<Info>
     {
         List<Info> list;
-        public event Action GetInfo;
 
         public InfoCollection(Info[] infos)
         {
@@ -21,8 +20,15 @@ namespace PythonDirectory
         {
             get
             {
-                GetInfo();
                 return list[i];
+            }
+        }
+
+        public int Count
+        {
+            get
+            {
+                return list.Count;
             }
         }
 
