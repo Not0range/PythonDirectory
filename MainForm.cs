@@ -14,7 +14,6 @@ namespace PythonDirectory
 {
     public partial class MainForm : Form
     {
-        const float SIZE_MULTIPLER = 2.5F;
         InfoCollection _info;
         public MainForm()
         {
